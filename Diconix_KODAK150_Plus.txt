@@ -1,0 +1,154 @@
+
+0000 ******************************************************************
+0010 *                                                                *
+0020 *   8255 PARALLEL PRINTER PORT CHECK PROGRAM FOR KODAK 150 PLUS  *
+0030 *                                                                *
+0040 *   PURPOSE:  TO MAKE I/0 PORT INTO CENTRONIX PORT               *
+0050 *             FOR THE IO TECHNOLOGY MULTI  BOARD                 *  
+0060 *   WRITTEN BY GREG BOBER                                        *
+0070 *              GREGLORI_MI@WOWWAY. COM                           *
+0080 *   SPECIFIC USE  :  IMSAI PCS 80/30                             *
+0090 *   LAST UPDATE   :  12/21/2020         -                        *
+0100 *                    8/14/2021 SET UP FOR KODAK 150PLUS          *
+0110 *                                                                *
+0120 *  KODAK 150 PLUS IS EXPECTED TO HAVE THESE DIP SETTINGS         *
+0130 *          SW1 DOWN = CR ONLY                                    *
+0140 *          SW2 DOWN = 11 INCH PAPER                              *
+0150 *          SW3 DOWN = EPSON FX80 COMMANDS                        *
+0160 *          SW4 DOWN = IBM CHARACTER SET 1                        *
+0170 *          SW5 TO SW 8 DOWN = USA CHARACTER SET                  *
+0180 *          SW9 DOWN =  12 CHARACTERS PER INCH                    *
+0190 *         SW10 DOWN = MANUFACTURING USE ONLY IS OFF              *
+0200 ******************************************************************
+0220 *
+0230 ONE~MILLISECOND  EQU   0135D          ;  1.004MS WITH 4MHZ 8085
+0240 *
+0250 * I/0 TECHNOLOGY'S MULTI-PORT BOARD
+0260 *
+0270 IOTECH~BASE      EQU   080H           ; START OF BOARD ADDRESS
+0280 IOTECH~U19~PORTA EQU   IOTECH~BASE+0  ; U19 8255, PORT.A
+0290 IOTECH~U19"PORTB EQU   IOTECH~BASE+1  ; U19 8255, PORT.B
+0300 IOTECH~BAUD~SELECT EQU IOTECH~U19~PORTB  ; U19 8255, BAUD CONTROL
+0310 IOTECHTU19~PORIC EQU   IOTECH~BASE+2  ; U19 8255, PORT.C
+0320 TOTECH~U19~CTRL  EQU   IOTECH~BASE+3  ; U19 CONTROL REGISTER    
+0330 IOTECH~U16~PORTA EQU   IOTECH~BASE+4  ; Ul16 8255, BREAD BOARD
+0340 IOTECH~U16~PORTB EQU   IOTECHBASE+5   ; U16 8255, BREAD BOARD
+0350 IOTECH~U16~PORTC EQU   IOTECH~BASE+6  ; U16 8255, BREAD BOARD
+0360 IOTECH~U16~CTRL  EQU   IOTECH~BASE+7  ; Ul6 CONTROL REGISTER
+0370 TOTECH~U29~SERIAL~DATA EQU IOTECH~BASE+8  ; U29 8251, SERIAL DATA PORT
+0380 IOTECH~U29~CTRL  EQU   IOTECH~BASE+9  ; U29 CONTROL REGISTER
+0390 IOTECH~U29~SERIAL~STATUS EQU IOTECH~U29~CTRL
+0400 IOTECH~8251~TXD~RDY~MASK EQU O5H
+0410 IOTECH~U36~SERIAL~DATA EQU IOTECH~BASE+12  ; U36 8251, SERIAL DATA PORT
+0420 IOTECH~U36~CTRL  EQU   IOTECH~BASE+13  ; U36 CONTROL REGISTER
+0430 TOTECH~U36~SERIAL~STATUS EQU IOTECH~U36~CTRL
+0440 IOTECH~TIMERO    EQU   IOTECH~BASE+16  ; U20 8253, COUNTERO
+0450 IOTECH~TIMER1    EQU   IOTECH~BASE+17  ; U20 8253, COUNTER1
+0460 IOTECH~TIMER2    EQU   IOTECH~BASE+18  ; U20 8253, COUNTER2
+0470 IOTECH~TIMER~CTRL EQU  IOTECH~BASE+19  ; U20 CONTROL REGISTER
+0480 IOTECH~VECTOR~INTERRUPT EQU IOTECH~BASE+20  ; U2 8214 INTERUPT CONTROL    
+0490 *
+0630 *  CENTRONIX PRINTER PORT SET UP ON IOTECH MIO CARD
+0640 *
+0650 CENTRONICS~DATA  	EQU     IOTECH~U16~PORTA
+0660 CENTRONICS~CTRL  	EQU     IOTECH~U16~PORTC ; UPPER NIBBLE
+0670 CENTRONICS~STATUS 	EQU     IOTECH~U16~PORTC ; LOWER NIBBLE
+0680 CENTRONICS~BUSY  	EQU     00000001B        ; PIN 11 ON RIBBON CABLE
+0690 CENTRONICS~ERROR 	EQU     10000010B        ; PIN 15 ON RIBBON CABLE
+0700 CENTRONICS~ACK   	EQU     00001000B        ; PIN  10 ON RIBBON CABLE
+0710 CENTRONICS~INIT  	EQU     00000110B        ; PIN 16 ON RIBBON CABLE
+0720 CENTRONICS~STROBE 	EQU     10000000B        ;  PIN 1 ON RIBBON CABLE
+0730 CENTRONICS~PAPEREMPTY   EQU 00000100B       ;  PIN 12 ON RIBBON CABLE
+0740 *                         
+0750 *
+0760 * EXERCISE PRINTER PORT CARD
+0770 *
+0780 *
+0790                          ORG      OECOOH         ; COULD BE ANYWHERE
+0800 *
+0810                          LXI      SP,OE7FFH      ; OR USE OPERATING SYSTEM STACK
+0820                          CALL     LDINIT
+0830                          LXY      H,PRINTER~TEST~MESS
+0840                          CALL     PRINTLINEOUT   ; SEND OUT THAT PRINTER STRING
+0850                          HLT
+0860 *                                                                                                                   .
+0870 * SUBROUTINES
+0880 *
+0890 * LIST OUTPUT CHECKS FOR THE PRINTER ATTENTION
+0900 * IF PRINTER ATTENDION IS NEEDED, THEN SET CARRY (C) ON RETURN
+0910 *
+0920 LDOUT                    CALL     LDATN            ; PRINTER ATTENTION  = NO PAPER
+0930                          RC                        ; YES RETURN CARRY SET
+0940 LDOUT1                   IN       CENTRONICS~STATUS  ; PRINTER READY?
+0950                          ANI      CENTRONICS~BUSY  ; PRINTER READY FOR NEXT BYTE?
+0960                          JINZ     LPOUT            ; READY=BUSY=0
+0970                          MOV      A,B
+0980 LDOUT2                   OUT      CENTRONICS~DATA
+0990                          CALL     CENTRONICS~DELAY ; DATA SETUP TIME
+1000                          MVI      A,0
+1010                          OUT      CENTRONICS~CTRL  ; STROBE=0                  .
+1020                          CALL     CENTRONICS~DELAY
+1030                          MVI      A,OFCH           ; STROBE=1
+1040                          OUT      CENTRONICS~CTRL
+1050                          LXI      B,4*ONE~MILLISECOND
+1060                          JMP      PRINTERVDELAY~LOOP  ; DATA HOLD TIMB
+1070 LDOUT3                   NOP
+1080                          RET
+1000 *
+1100 * PRINTER ATTENTION CHECK
+1110 * CARRY SET = ATTENTION
+1120 *
+1130 LDATN                    NOP                        ; NOP TO ACTIVATE THIS ROUTINE
+1140                          IN       CENTRONICS~STATUS
+1150 CENTRONICS~PROBLEM EQU CENTRONICS~PAPER~EMPTY
+1160                          ANI      CENTRONICS~PROBLEM ; ATTENTION NO PRINTER PAPER
+1170                          RZ                         ; OK
+1180                          STC                        ; SET CARRY FOR ATTN
+1190                          RET                        ; DONE
+1200 *                                       
+1210 * INITIALIZE THE LIST DEVICE INTERFACE 8255 PARALLEL PORTS
+1220 *                                       
+1230 LDINIT                   MVI      A,10000011B       ; ONLY PORTC(0:3) ARE INPUTS
+1240 INIT~CENTRONICS~PORT EQU LDINIT
+1250                          OUT      IOTECH~U16~CTRL   ; SET UP THE 8255 IO PORTIc
+1260                          MVI      A,OFCH            ; SET STROBE=1
+1270                          OUT      CENTRONICS~CTRL
+1280                          OUT      CENTRONICS~DATA
+1290                          LXI      H,PRINTER~SETUP   ; RESET AND CONFIGURE THE PRINTER
+1300                          CALL     PRINTLINEOUT
+1310 DOUBLE~PRTR~DELAY        LXI      B,OFFFFH          ; DELAY BEFORE SENDING PRINT DATA
+1320                          JMP      PRINTER~DELAY~LOOP
+1330 *
+1340 CENTRONICS~DELAY         LXI      B,ONE~MILLISECOND/4  ; 250US STROBE DURATION
+1350 PRINTER~DELAY            DCX      B
+1360                          MOV      A,B               ; CONTINUE DELAY?
+1370                          ORA      C
+1380                          RZ
+1390                          JMP      PRINTER~DELAY~LOOP                                                 .
+1400 ******************************************************************
+1410 * SEND LINE TO PRINTER DEVICE                                    *
+1420 ******************************************************************
+1430 PRINTLINEOUT             MOV      A,M                ; GET BYTE TO TRANSMIT FROM (HL)
+1440                          ANI      O7FH               ; STRIP TC ONLY ASCII 7 BITS
+1450                          MOV      B,A
+1460                          CALL     LDOUT              ; SEND REG.B TO PRINTER
+1470                          MOV      A,M                ; CHECK BIT7 OF BYTE SENT
+1480                          ANT      080H               ; IS MSB SET?
+1490                          RNZ                         ; YES, THEN STRING IS DONE
+1500                          INX      H                  ; POINT AT NEXT BYTE
+1510                          JMP      PRINTLINEOUT
+1520 ******************************************************************
+1530 * MESSAGE TABLE                                                  *
+1540 * COMMANDS ARE FROM KODAK DICONIX 150 PLUS REFERENCE MANUAL      *
+1550 ******************************************************************
+1560 TEST~PRINT        DB       027,116            ; PRINT A TEST PAGE
+1570                   DTH      ' '                                                                              :
+1580 PRINTER~SETUP     DB       027,64             ; RESET THE PRINTER
+1590                   DB       027,73,7           ; NLQ FONT
+1600                   DB       024                ; CLEAR PRINT BUFFER
+1610                   DB       080H
+1620 PRINTER~TEST~MESS DT      'MY PUPPY IS A GOOD DOG.’
+1630                   DB       0AH, 08DH
+1640 *
+1650 * END
+1660 *
