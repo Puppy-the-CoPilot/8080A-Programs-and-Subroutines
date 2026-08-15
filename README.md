@@ -23,3 +23,6 @@ A:  Those didn't exist in 1975, back then there was mostly CPU level Assembly La
     The IO driver subroutines of 1975 are similar to those in modern BIOS DLL drivers (device level).
     Early CP/M was starting to come out of development.
 
+WARNING: GITHUB files are from OCR convert ink jet line printer.
+          OCR conversion was not 100%, some conversion errors might still exist after correction effort.
+          
