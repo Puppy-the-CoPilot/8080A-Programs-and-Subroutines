@@ -1,0 +1,181 @@
+0000 ******************************************************************
+0010 *                                                                *
+0020 *    8251  SERIAL HP2225D PRINTER PORT CHECK PROGRAM             *
+0030 *                                                                *
+0040 *    PURPOSE      :  TO MAKE A HP2225D SERIAL PRINTER PORT       *
+0050 *                    WITH THE IO TECHNOLOGY MULTI BOARD          * 
+0060 *   WRITTEN BY GREG BOBER                                        *
+0070 *              GREGLORI_MI@WOWWAY. COM                           *
+0080 *   SPECIFIC USE  :  IMSAI PCS 80/30                             *
+0090 *    LAST UPDATE    :    8/25/2020                               *
+0100 *                       12/13/2020 FIXED INIT REOUTINE           *
+0110 *                        1/23/2021 SET UP HP PRINT COMMANDS      *
+0120 *                        2/24/2021 INTERBYTE DELAY=16MS          *
+0130 *                        2/24/2021 VERIFIED WITH HP2225D         *
+0140 *                        2/29/2021 TRIED EXPANDED PITCH          *
+0150 *                                                                *
+0160 ******************************************************************
+0170 *
+0180 ONE~MILLISECOND EQU     0135D             ;  1.004MS WITH  4MHZ  8085
+0190 *  
+0200 *  I/0 TECHNOLOGY'S MULTI~PORT BOARD
+0210 *
+0220 IOTECH~BASE       EQU      080H           ; START OF BOARD ADDRESS
+0230 IOTECH~U19~PORTA  EQU   	IOTECH~BASE+0  ; U19 8255, PORT.A
+0240 IOTECH~U19~PORTE  EQU   	IOTECH~BASE+1  ; U19 8255, PORT.B
+0250 IOTECH~BAUD~SELECT EQU 	IOTECH~U19~PORTB  ; U19 8255, BAUD CONTROL
+0260 IOTECH~U19~PORTC  EQU   	IOTECH~BASE+2  ; U19 8255, PORT.C
+0270 IOTECH~U19~CTRL   EQU    	IOTECH~BASE+3  ; U19 CONTROL REGISTER
+0280 IOTECH~U16~PORTA  EQU    	IOTECH~BASE+4  ; U16 8255, BREAD BOARD
+0290 IOTECH~U16~PORTB  EQU   	IOTECH~BASE+S  ; U16 8255, BREAD BOARD
+0300 IOTECHU16~PORTC   EQU    	IOTECH~BASE+6  ; U16 8255, BREAD BOARD
+0310 IOTECH~U16~CTIRL  EQU	IOTECH~BASE+7  ; U16 CONTROL REGISTER
+0320 IOTECH~U29~SERIAL~DATA EQU  IOTECH~BASE+8  ; U29 8251, SERIAL DATAPORT
+0330 IOTECH~U29~CTRL   EQU      IOTECH~BASE+9  ; U20 CONTROL REGISTER
+0340 TOTECH~U29~SERIALSTATUS EQU IOTECH~U20~CTRL
+0350 IOTECH~8251~TXD~RDY~MASK EQU  05H
+0360 IOTECH~U36~SERIAL~DATA EQU IOTECH~BASE+12  ; U36 8251, SERIAL DATA PORT
+0370 IOTECH~U36~CTRL   EQU      IOTECH~BASE+13  ; U36 CONTROL REGISTER
+0380 IOTECH~U36~SERIAL~STATUS EQU  IOTECH~U36~CTRL
+0390 IOTECH~TIMER0     EQU      IOTECH~BASE+16  ; U20 8253, COUNTER0
+0400 IOTECH~TIMER1     EQU      IOTECH~BASE+17  ; U20 8253, COUNTER1
+0410 IOTECH~TIMER2     EQU      IOTECH~BASE+18  ; U20 8253, COUNTER2
+0420 IOTECH~TIMER~CIRL EQU 	IOTECH~BASE+19  ; U20 CONTROL REGISTER
+0430 IOTECH~VECTOR~INTERRUPT EQU  IOTECH~BASE+20  ; U2 8214 INTERUPT CONTROL
+0440 *
+0450 *  BR2941L BR1941L OR GI EQUIVALENT PORT VALUES ON TOTECH MIC CAR
+0460 *                                                                                                       .
+0470 BR2941L~50       EQU       0
+0480 BR2941L~75       EQU       1
+0490 BR2041L~110      EQU       2
+0500 BR2941L~300      EQU       5
+0510 BR2941L~600      EQU       6
+0520 BR2941L~1200     EQU       7
+0530 BR2941L~2400     EQU       0AH
+0540 BR2941L~4860     EQU       0CH
+0550 BR2941L~9600     EQU       0EH
+0560 BR2041L~19200    EQU       0FH
+0570 *
+0580 *
+0590 * EXERCISE PRINTER PORT
+0600 *
+0610 *
+0620                   ORG	0E000H            ;  COULD BE ANYWHERE
+0630 *
+0640                   LXI	SP,0E7FFH         ; OR USE OPERATING SYSTEM STACK
+0650                   CALL     LDINIT
+0660 PRINT™LOOP        LXI  	H,PRINTER TEST MESS
+0670                   CALL     PRINTLINEOUT	  ; SEND OUT THAT PRINTER STRING
+0680                   JMP	PRINT~LOOP
+0690 *
+0700 * SUBROUTINES
+0710 *
+0720 ******************************************************************
+0730 *                                                                *
+0740 *  SET UP THESE SUB ROUTINES TO BE WRITTEN OVER THE              *
+0750 *  EXISTING MICROPOLIS SERTAL PRINTER ROUTINES                   *
+0760 *                                                                *
+0770 *  APPENDIX PAGE E~11 FROM MICROPOLIS DOS USERS MANUAL           *
+0780 *  USED TO FORMAT, SET UP, ARRANGE THE SUBROUTINES BELOW         *
+0790 *                                                                *                   
+0800 ****************************************************************** 
+0810 *
+0820 * NEW PHYSICAL HANDLER FOR THE LIST DEVICE
+0830 *
+0840 * SPECIFICALLY FOR THE IO TECHNOLOGY MULTI BOARD
+0850 *                                                           .
+0860 * LIST OUTPUT CHECKS FOR THE PRINTER ATTENTION
+0870 * IF PRINTER ATTENTION IS NEEDED, THEN SET CARRY(C) ON RETURN
+0880 *
+0890 LDOUT             CALL     LDATN                ; PRINTER ATTENTION = NO PAPER
+0900                   RC                            ; YES RETURN CARRY SET
+0910 LDOUT1            IN       IOTECH~U29~SERIAL~STATUS  ; PRINTER READY?
+0920                   ANI      085H                 ; TXD EMPTY, DSK OK TO RECEIVE
+0930                   XRI      085H
+0940                   JNZ      LDOUT                ; LOOP TILL READY
+0950                   MOV      A,B
+0960 LDOUT2            OUT      IOTECH~U29~SERTAL~DATA
+0970                   JMP      PRINTER~DELAY        ; DONE, NOW GIVE INTER BYTE DELAY
+0980                   FILL     10,0
+0990 *
+1000 * PRINTER ATTENTION CHECK                                                            ;
+1010 * CARRY SET = ATTENTION
+1020 *
+1030 LDATN             XRA      A                   ; NOP TO ACTIVATE THIS ROUTINE
+1040                   RET
+1050                   IN	IOTECH~U29~SERIAL~STATUS
+1060                   NOP
+1070                   ANI      080H                ; ATTENTION FLAG BIT
+1080                   XRI      080H                ; ATTENTION FLAG BIT=17
+1090                   RZ                           ; OK
+1100                   STC                          ; SET CARRY FOR ATTN
+1110                   RET                          ; DONE
+1120                   FILL    10,0
+1130 *
+1140 * INITIALIZE THE LIST DEVICE INTERFACE USART
+1150 *
+1160 *
+1170 LDINIT            MVI      A,10001001B         ; PORT A & B ARE OUTPUT, PORT C INPUT
+1180 INIT~PRINTER~PORT 	EQU LDINIT           
+1190                   OUT      IOTECH~U19~CTRL
+1200                   MVI      A,PRINTERBAUD~RATE  ; SET BUAD RATE GENERATOR  
+1210                   OUT      IOTECH~BAUD~SELECT
+1220                   MVI      A,OFCH+PRINTER~BAUD~RATE  ; SET BR1941L CSR=C8T=1
+1230                   OUT      IOTECHBAUD~SELECT
+1240                   MVI      A,040H              ; REQ RESET PER FIG.12 OF 8251 SPEC
+1250                   OUT      IOTECH~U29~CTRL
+1260                   MVI      4,0CEH              ; 2 STOP BITS, NO PARITY, 16X BAUD
+1270                   OUT      IOTECH~U29~CTRL
+1280                   MVI      A,033H              ; RTS=DTR=ON, TXD ENABLED
+1290                   OUT      IOTECH~U29~CTRL
+1300 *
+1310                   CALL     PRINTER~DELAY
+1320                   LXI      H,PRINTER~SETUP
+1330                   CALL     PRINTLINEOUT
+1340                   LXI      B,0FFFFH            ; LONG PRINT SET UP DELAY
+1350                   JMP      PRINTER~DELAY~LOOP
+1360 *
+1370 PRINTER~DELAY     LXI      B,ONE~MILLISECOND*12D  ; AVOID FILLING HP2225D BUFFER                                                                                                                    '
+1380 PRINTER~DELAY~LOOP DCX B
+1390                   MOV      A,B                 ; CONTINUE DELAY?
+1400                   ORA      C
+1410                   RZ
+1420                   JMP      PRINTER~DELAY~LOOP
+1430                   FILL     10,0
+1440 ******************************************************************
+1450 *  SEND LINE TO PRINTER DEVICE                                   *
+1460 ******************************************************************
+1470 PRINTLINEOUT     MOV       A,M                ; GET BYTE TO TRANSMIT FROM (HL)
+1480                  ANI       07FH               ; STRIP TO ONLY ASCII 7 BITS
+1490                  MOV       B,A
+1500                  CALL      LDOUT              ; SEND REG.B TO PRINTER
+1510                  MOV       A,M                ; CHECK BIT7 OF BYTE SENT
+1520                  ANI       080H               ; IS MSB SET?                 
+1530                  RNZ
+1540                  INX       H                  ; POINT AT NEXT BYTE
+1550                  JMP       PRINTLINEOUT
+1560 ******************************************************************
+1570 *  MESSAGE TABLE                                                 *
+1580 *  COMMANDS ARE FROM HP THINKJET PRINTER REFERENCE               *
+1590 *           AND HP2225C THINKJET OWNERS MANUAL PN0O2225-90077    *
+1600 *           BOTH DOCUMENT SECTIONS B AND C FOR PRINTER COMMANDS  *
+1610 *  NOTE: HP COMMANDS ARE GIVEN IN DECIMAL AS IN THE HP MANUAL    *
+1620 ******************************************************************
+1630 PRINTER~TEST~MESS DT       'PRANCER  IS A GOOD PUPPY DOG, LOVES BONES AND CHASING SQUIRRELS'
+1640                  DB        ODH,  08AH
+1650 *
+1660 SETUP~STRING     DB        27,122            ; PRINT A TEST PAGE
+1670 PRINTER“SETUP    DB        27,69             ; RESET THE PRINTER
+1680                  DB        27,38,108,54,68   ; 6 LINES PER INCH
+1690                  DB        27,38,108,49,76   ; PERFORATION SKIP=ON
+1700                  DB        27,38,115,48,67   ; WRAP AROUND=ON
+1710 *
+1720 *  DB  27,38,108, 35H, 35H,80  ; 55 LINES PER PAGE
+1730 *    
+1740                  DB        27,38,107,49,87   ; BI DIRECTIONAL PRINTING
+1750                  DB        27,38,100,64      ; UNDERLINING=OFF
+1760                  DB        27,40,115,49,66   ; PRINT QUALITY=ON
+1770                  DB        27,40,115,49,66+80H ; BOLD=ON
+1780 *
+1790 * END
+1800 *
