@@ -1,0 +1,200 @@
+0000 ******************************************************************
+0010 *                                                                *
+0020 *    UPDATE VIDEO DISPLAY WITH HOURS, MINUTE, SECONDS            *
+0030 *       FROM QT SYSTEMS REAL TIME CLOCK CALENDAR MSM5832         *
+0040 *                                                                *
+0050 *    PURPOSE       :  TO SHOW TIME WHEN IN DOS & BASIS           *
+0060 *    SPECIFIC USE  :  IMSAI PCS 80/30                            *
+0070 *    LAST UPDATE   :  8/24/2020                                  *
+0080 *    WRITTEN BY    :  GREG BOBER                                 *
+0090 *                     GREGLORI_MI@WOWWAY.COM                     *
+0100 *                                                                *
+0110 *    NOTE: TURNING OFF RTC DURING READS CAN BE PROBLEM & REMOVED *
+0120 *          IF ON POWER DOWN THE 5832 WAS BEING READ, THE RTC     *
+0130 *          STOPS COUNTING, IT DOES NOT RUN WHEN SYSTEM IS ASLEEP *
+0140 *                                                                *
+0150 *    PUT THIS SUBROUTINE CALL IN KEPYBOARD INPUT LOOP            *
+0160 *                     CALL DISPLAY~TIME~NOW                      *
+0170 *                                                                *
+8180 ******************************************************************
+0190 *
+0200 IMSAI~VIOB~DISPLAY~STRING EQU OFFB6H    ; TERMINATE WITH LAST BYTE=0
+0210 IMSAI~VIOB~CCRLF EQU   OFFS50H          ; CARRIAGE RETURN LINE FEED
+0220 *
+0230 * QT SYSTEMS REAL TIME CLOCK CALENDAR BOARD
+0240 *
+0250 MDOS~RTC~UPDATE~COUNTER EQU 077AH       ; UNUSED RAM IN MICROPOLIS DOS
+0260 QTRTC~DATA~PORT EQU   253               ; MSM5832 DATA
+0270 QT~RTC~ADDR~PORT EQU   254              ; MSM5832 ADDRESS
+0280 QTTRTC~VIDEO~TIME~ADDR~2480 EQU OFO0OH+72  ; UPPER RIGHT ON 24X80 VIOB
+0290 *
+D300 ******************************************************************
+0310 * SHOW TIME                                                      *
+D320 ******************************************************************
+0330 SHOW~TIME         EQU       DISPLAY~TIME~PACED
+0340 DISPLAY~TIME~PACED PUSH 	 PSW
+0350                   PUSH	 B
+0360                   LDA       077AH                ; GET LAST TIME STAMP VALUE
+a370                   MOV       B,A                  ; PUT  IT  IN B FOR NOW
+0380                   MVI       A,020H               ; READ LOWER SECONDS RTC VALUE
+0390                   OUT       QT~RTC~ADDR~PORT
+0400                   NOP                            ; SMALL DELAY FOR SLOW RTC IC
+0410                   IN        QI~RTC~DATA~PORT     ; READ THE COUNTER
+0420 *  ANI  OFH  ; MASK OFF AND KEEP LOWER BITS
+0430                   CMP       B                   ; STILL THE SAME VALUE?
+0440                   JZ        DISPLAY~RTC~EXIT
+0450                   STA       077AH               ; SAVE FOR UPDATE COMPARING
+0460                   POP       B	
+0470                   POP       PSW
+0480 *
+0490 DISPLAY~TIME      PUSH      PSW
+0500 DISPLAY"TIME~NOW  EQU       DISPLAY~TIME
+0510                   PUSH      B
+0520                   PUSH      H
+0530                   PUSH      D
+0540                   LXI       H,QT~RTC~VIDEO~TIME~ADDR~2480 ; DISPLAY TO VIDEO
+0550 * CONVERT HOURS REGISTERS
+0560                   MVI       A,05
+0570                   LXI       D,030FH              ; REGISTER MASK
+0580                   CALL      DISPLAY~RTC~PAIR     ; SHOW HOURS
+0590 *
+0600                   LDA       QT~RTC~VIDEO~TIME~ADDR~2480  ; TEST FIRST DIGIT
+0610                   CPL       '0'                  ; GIVE A BLANK IF ZERO
+0620                   JNZ       MINUTES
+0630                   MVI       A,' '                ; LEAD ZERO BLANKING
+0640                   STA       QT~RTC~VIDEO~TIME~ADDR~2480
+0650 * CONVERT MINUTES REGISTERS
+0660 MINUTES           MVI       A,03
+0670                   LXI       D,070FH
+0680                   CALL      DISPLAY~RTC~PAIR~WITH~COLON
+0690 * CONVERT SECONDS REGISTERS
+Q700                   MVI       A,01
+0710                   LXI       D,070FH
+0720                   CALL      DISPLAY~RTC~PAIR~WITH~COLON
+0730 *
+0740 DISPLAY TIME~END  POP       D                    ; RESTORE REGISTERS
+0750                   POP       H
+0760 DISPLAY"RTC~EXIT  POP       B
+0770                   POP       PSW
+0780                   RET
+0790 *
+0800 ******************************************************************
+0810 *    GET A PAIR OF DIGITS AND CONVERT TO ASCII                   *
+0820 ******************************************************************
+0830 DISPLAY RTCTPAIR~WITH COLON MVI M,':'
+0840                  INX      H
+0850 DISPLAY RTC~PAIR PUSH  PSW                       ; SAVE A
+0860                  CALL     GET~RTC~DATA           ; GET UPPER DIGIT
+0870                  POP      PSW                    ; GET LOWER DIGIT
+0880                  DCR      A 
+0890 ******************************************************************
+0900 *    RETRIEVE DATA NIBBLE FROM MSM5832 CHIP                      *
+0910 ******************************************************************
+0920  GET"RTC~DATA    ORI      020H                  ; ENABLE READ PIN
+0930                  OUT      QT~RTC~ADDR~PORT
+0940                  NOP
+0950                  IN       QT~RTC~DATA~PORT      ; GET DATA
+0960                  ANA      D
+0970                  MOV      D,E                   ; PREP FOR CHECKING LOWER NIBBLE
+0980                  ORI      '0'                   ; CONVERT TO ASCII
+0990                  MOV      M,A
+1000                  INX      H
+1010                  RET
+1020 ******************************************************************
+1030 *    DELAY                                                       *
+L040 ******************************************************************
+1050 SMALL~DELAY      XRA      A
+1060 RTCTDELAY~LOOP   DCR      A                     ; LOOP TILL A=0
+1070                  RZ
+1080                  JMP      RTC~DELAY~LOOP
+1090 ******************************************************************
+1100 *    LOAD NEW VALUES INTO THE MSM5832 CHIP                       *
+1110 ******************************************************************
+1120 SET~CLOCK        LXI      H,RTC~PROMPT          ; GET NEW CLOCK VALUES
+1130                  CALL     IMSAI~VIOB~DISPLAY~STRING
+1140 *
+1150 *  COUNT AND COPY THE DATA  STRING ONTO THE STACK
+1160 COLLECT~NEW~TIME~STRING LXI  SP,BOOTLOADER~STACK ; MIGHT NOT BE NEEDED
+1170                   MVI     C,0                   ; COUNT THE ENTRIES
+1180 GET~MORE~INPUT~STRING CALL  GET~AND~WAIT~FOR~KEYBOARD~BYTE
+1190                   PUSH    PSW                   ; SAVE THE BYTE FOR LATER
+1200                   INR     C                     ; COUNT HOW MANY ENTRIES ARE MADE
+1210                   CPI     0DH                   ; RETURN KEY PRESSED?
+1220                   JZ      READ~NEW~TIME~STRING
+1230                   JMP     GET~MORE~INPUT~STRING
+1240 BADTNEW~TIME~STRING LXI  H,RTC~SERROR           ; SYNTAX ERROR
+1250                   CALL    IMSAI~VIOB~DISPLAY~STRING
+1260                   JMP     SET~CLOCK
+1270 *
+1280 * THERE IS NO SYNTAX CHECKING OF THE ENTERED VALUES
+1290 * LOAD THE BYTES INTO RTC IN REVERSE ORDER OF ENTRY
+1300 READ~NEW~TIME~STRING MOV A,C                    ; INPUT STRING CORRECT LENGTH
+1310                   ADI     -17                   ; ACCEPT NO MORE OR NO LESS
+1320                   JNZ     BAD~NEW~TIME~STRING   ; FORMAT PROBLEM DETECTED
+1330 *
+1340                   MVI     A,010H                ; CLOCK HOLD SIGNAL
+1350                   OUT     QT~RTCDATA~PORT
+1360                   NOP
+1370                   LXI     B,0C10H               ; REGISTER COUNT AND MASK
+1380                   LXI     H,BOOTLOADER~STACK~1  ; POINT AT THE ASCII INPUT STRING
+1390 * LOAD IN NEW YEAR
+1400                   CALL    LOAD~RIC~PAIR
+1410 * LOAD IN NEW MONTHS
+1420                   CALL    LOAD~RTC~PAIR
+1430 * LOAD IN NEW DAY OF MONTH     
+1440                   CALL    LOAD~RTC~PAIR
+1450 * LOAD  IN NEW DAY OF WEEK
+1460                   CALL    LOAD~RTC~REG
+1470                   CALL    VERIFY~RTC~SEPARATOR     
+1480 * LOAD IN NEW HOURS
+1490                   CALL    LOAD~RTC~PAIR
+1500 * LOAD IN NEW MINUTES
+1510                   CALL    LOAD~RTC~PAIR
+1520 * RELEASE THE COUNTER TO CONTINUE OPERATION
+1530 RTCTDONE          XRA     A
+1540                   OUT     QT~RTC~DATA~PORT    ; STOP HOLDING COUNTERS
+1550                   DCR     A
+1560                   OUT     QT~RTC~ADDR~PORT    ; ENABLE CLOCK OUTPUTS
+1570 *
+1580                   CALL    DISPLAY~A~BLANK~LINE
+1590                   JMP     GET~ANOTHER~SELECTION
+1600 ******************************************************************
+1610 * LOAD IN A GROUP OF REGISTERS                                   *
+1620 ******************************************************************
+1630 LOAD~RTC~PAIR     CALL    LOAD~RTC~REG
+1640                   CALL    LOAD~RTC~REG
+1650 VERIFY~RTC~SEPARATOR MOV   A,M               ; IS DATA FIELDS SEPARATED?
+1660                   DCX     H
+1670                   DCX     H                  ; POINT AT NEXT ENTERY
+1680                   CPI     ' '                ; OK TO USE BLANK AS  SEPARATO
+1690                   RZ
+1700                   CPI     ','                ; OK TO USE COMMA AS A SEPARATOR                                                                                                       ’
+1710                   RZ
+1720                   RET                        ; CHECK DOESN'T ACTUALLY WORK
+1730                   JMP      BAD~NEW~TIME~STRING
+1740 ******************************************************************
+1750 * LOAD VALUE INTO MSM5832 REGISTER                               *
+1760 ******************************************************************
+1770 LOAD~RTC~REG     MOV       A,M               ; GET BYTE
+1780                  ANI       0FH               ; SAVE LOWER BITS
+1790                  ORA       C                 ; KEEP HOLD ENABLED
+1800                  OUT       QT~RTC~DATA~PORT  ; GIVE THE DATA
+1810                  MOV       A,B               ; PRESENT REGISTER
+1820                  OUT       QT~RTC~ADDR~PORT  ; ADDRESS
+1830                  ORA       C                 ; ENABLE WRITE SIGNAL
+1840                  OUT       QT~RTC~ADDR~PORT
+1850                  MOV       A,B               ; DISABLE WRITE SIGNAL
+1860                  OUT       QT~RTC~ADDR~PORT
+1870                  DCR       B                 ; AND NEXT RTC REGISTER
+1880                  DCX       H                 ; POINT AT NEXT ENTERED BYTE
+1890                  DCX       H
+1900                  RET
+1910 *
+1920 RTC~PROMPT       DB       0DH,0AH
+1930                  DTZ      'ENTER NEW CLOCK VALUES YY MM DD W HH MM  = '
+1940 RTC~SERROR       DB       0DH,0AH
+1950                  DT       'INPUT STRING FORMAT ERROR'
+1960                  DB       0DH,0AH, 0
+1970  *
+1980  *
+1990  *
