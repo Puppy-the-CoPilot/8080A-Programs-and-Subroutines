@@ -18,15 +18,15 @@
 0170 *                                                                *
 8180 ******************************************************************
 0190 *
-0200 IMSAI~VIOB~DISPLAY~STRING EQU OFFB6H    ; TERMINATE WITH LAST BYTE=0
-0210 IMSAI~VIOB~CCRLF EQU   OFFS50H          ; CARRIAGE RETURN LINE FEED
+0200 IMSAI~VIOB~DISPLAY~STRING EQU 0FFB6H    ; TERMINATE WITH LAST BYTE=0
+0210 IMSAI~VIOB~CCRLF EQU   0FFS50H          ; CARRIAGE RETURN LINE FEED
 0220 *
 0230 * QT SYSTEMS REAL TIME CLOCK CALENDAR BOARD
 0240 *
 0250 MDOS~RTC~UPDATE~COUNTER EQU 077AH       ; UNUSED RAM IN MICROPOLIS DOS
 0260 QT~RTC~DATA~PORT EQU   253              ; MSM5832 DATA
 0270 QT~RTC~ADDR~PORT EQU   254              ; MSM5832 ADDRESS
-0280 QT~RTC~VIDEO~TIME~ADDR~2480 EQU OFO0OH+72  ; UPPER RIGHT ON 24X80 VIOB
+0280 QT~RTC~VIDEO~TIME~ADDR~2480 EQU 0F000H+72  ; UPPER RIGHT ON 24X80 VIOB
 0290 *
 D300 ******************************************************************
 0310 * SHOW TIME                                                      *
@@ -133,7 +133,7 @@ L040 ******************************************************************
 1320                   JNZ     BAD~NEW~TIME~STRING   ; FORMAT PROBLEM DETECTED
 1330 *
 1340                   MVI     A,010H                ; CLOCK HOLD SIGNAL
-1350                   OUT     QT~RTCDATA~PORT
+1350                   OUT     QT~RT~DATA~PORT
 1360                   NOP
 1370                   LXI     B,0C10H               ; REGISTER COUNT AND MASK
 1380                   LXI     H,BOOTLOADER~STACK~1  ; POINT AT THE ASCII INPUT STRING
@@ -168,7 +168,7 @@ L040 ******************************************************************
 1670                   DCX     H                  ; POINT AT NEXT ENTERY
 1680                   CPI     ' '                ; OK TO USE BLANK AS  SEPARATO
 1690                   RZ
-1700                   CPI     ','                ; OK TO USE COMMA AS A SEPARATOR                                                                                                       ’
+1700                   CPI     ','                ; OK TO USE COMMA AS A SEPARATOR
 1710                   RZ
 1720                   RET                        ; CHECK DOESN'T ACTUALLY WORK
 1730                   JMP      BAD~NEW~TIME~STRING
