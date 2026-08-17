@@ -25,4 +25,5 @@ A:  Those didn't exist in 1975, back then there was mostly CPU level Assembly La
 
 WARNING: GITHUB files are from OCR converted ink jet line printer paper output.
           OCR conversion was not 100%, some conversion errors might still exist after correction effort.
-          
+          Most common mis reads are OCR sees a B instead of E, I instead of T, and any tilde character "~".
+
